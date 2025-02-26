@@ -28,6 +28,8 @@ supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob"
+
 
 # Database connection function
 def get_db_connection():
