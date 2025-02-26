@@ -51,123 +51,6 @@ def authenticate_gmail():
 
     return build('gmail', 'v1', credentials=creds)
 
-# Extract lender name
-"""def extract_lender_name(from_field):
-    Extract lender name from the 'From' field of the email.
-    if not from_field:
-        return None
-    
-     # If 'via' is present, remove it and keep only the email address part
-    if "via" in from_field:
-        from_field = from_field.split(" via")[0].strip()
-    match = re.search(r'<([^>]+)>', from_field)
-    email = match.group(1) if match else from_field.strip()
-    if '@' in email:
-        domain_name = email.split('@')[1]
-        domain_name_base = domain_name.split('.')[0]
-        return domain_name_base.lower()
-    return None"""
-
-# Parse subject for business name
-"""def parse_subject_for_business_name(subject):
-    Parse the subject line to extract the business name.
-    try:
-        if not subject:
-            return "Unable to parse"
-        # Specific condition: Approval with business name and amount
-
-        if "Approval for $" in subject and "DBA" in subject:
-            parts = subject.split(" ")
-            dba_index = parts.index("DBA")
-            if dba_index > 0 and dba_index + 1 < len(parts):
-                return " ".join(parts[dba_index + 1:]).strip()
-        if " - " in subject:
-            parts = subject.split(" - ")
-            if len(parts) >= 3:
-                return parts[-1].strip()
-        if "Congratulations! Your deal for" in subject and "has been approved" in subject:
-            start = subject.find("Congratulations! Your deal for") + len("Congratulations! Your deal for")
-            end = subject.find("has been approved")
-            return subject[start:end].strip().strip('"')
-        
-        # Condition: Decline notice with "business name"
-        if "Decline Notice. Unfortunately, we are not able to approve your file at this time for" in subject:
-            start = subject.find("Decline Notice. Unfortunately, we are not able to approve your file at this time for") + len("Decline Notice. Unfortunately, we are not able to approve your file at this time for")
-            return subject[start:].strip().strip('"')
-         # Condition: "Missing Docs for 'business name'"
-        if "Missing Docs for" in subject:
-            start = subject.find("Missing Docs for") + len("Missing Docs for")
-            return subject[start:].strip().strip('"')
-
-        # Condition: "Decline for 'business name'"
-        if "Decline for" in subject:
-            start = subject.find("Decline for") + len("Decline for")
-            return subject[start:].strip().strip('"')
-             # Condition: "'Business name' Decline Notification: Your Application Has Been Declined"
-        if "Decline Notification: Your Application Has Been Declined" in subject:
-            end = subject.find(" Decline Notification: Your Application Has Been Declined")
-            return subject[:end].strip().strip('"')
-        if "for business name:" in subject:
-            start = subject.find("for business name:") + len("for business name:")
-            return subject[start:].split()[0].strip()
-        if "Application for" in subject and "has been Declined" in subject:
-            start = subject.find("Application for") + len("Application for")
-            end = subject.find("has been Declined")
-            return subject[start:end].strip()
-        if "Unfortunately, we are not able to approve your file at this time for" in subject:
-            start = subject.find("Unfortunately, we are not able to approve your file at this time for") + len("Unfortunately, we are not able to approve your file at this time for")
-            return subject[start:].strip().strip('"')
-        # Condition: "Application submission for 'business name' with ID 11111 declined"
-        if "Application submission for" in subject and "with ID" in subject and "declined" in subject:
-            start = subject.find("Application submission for") + len("Application submission for")
-            end = subject.find("with ID")
-            return subject[start:end].strip().strip('"')
-          # Condition: "FNX - Application # 372080 for 'business name:' Declined"
-        if "FNX - Application" in subject and "for" in subject and "Declined" in subject:
-            start = subject.find("for") + len("for")
-            end = subject.find("Declined")
-            return subject[start:end].strip().strip('"')
-          # Condition: Congratulations! SFC is considering an offer for 'business name'
-        if "SFC is considering an offer for" in subject:
-            start = subject.find("SFC is considering an offer for") + len("SFC is considering an offer for")
-            return subject[start:].strip().strip('"')
-        if "Your deal for" in subject and "has Missing Information" in subject:
-            start = subject.find("Your deal for") + len("Your deal for")
-            end = subject.find("has Missing Information")
-            return subject[start:end].strip()
-        if "Your deal for" in subject and "has been Approved" in subject:
-            start = subject.find("Your deal for") + len("Your deal for")
-            end = subject.find("has been Approved")
-            return subject[start:end].strip()
-        
-        if "Torro Submission" in subject and "(" in subject and ")" in subject:
-            start = subject.find("(") + 1
-            end = subject.find(")")
-            return subject[start:end].strip()
-        if subject.startswith("AFP OFFERS-") and "Lead ID" in subject and "-" in subject:
-            match = re.search(r"-([^-]+)$", subject)
-            if match:
-             return match.group(1).strip()
-        if "Approval Offer:" in subject:
-            start = subject.find(":") + 1
-            extracted_text = subject[start:].strip()
-            if subject.endswith(extracted_text):
-                return extracted_text
-        if subject.endswith("Wellen Capital, LLC") and "- Status Update -" in subject:
-           start = subject.find("- Status Update -")
-           extracted_text = subject[:start].strip()
-           return extracted_text
-
-        if "Submission Declined for" in subject:
-            start = subject.find("Submission Declined for") + len("Submission Declined for")
-            end = subject.find(" - ", start)
-            return subject[start:end].strip() if end != -1 else subject[start:].strip()
-        if "New sub -(Pathway Catalyst)" in subject:
-            start = subject.find("New sub -(Pathway Catalyst)") + len("New sub -(Pathway Catalyst)")
-            return subject[start:].strip()
-        return "Unable to parse"
-    except Exception:
-        return "Unable to parse" """
 
 # Check matches in the database using fuzzy matching
 def check_matches_in_db(lender_name, business_name):
@@ -284,7 +167,7 @@ def main():
         st.write("### Classified Declined Emails")
         st.dataframe(
             classified_data.style.format({
-                'created_at': lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if isinstance(x, str) else x,
+                'created_at': lambda x: pd.to_datetime(x).strftime('%Y-%m-%d %H:%M:%S') if pd.notna(x) else "N/A",
             }).set_table_styles([
                 {'selector': 'thead th', 'props': [('background-color', '#f2f2f2'), ('font-weight', 'bold')]},
                 {'selector': 'tbody td', 'props': [('text-align', 'left'), ('font-size', '17px'), ('padding', '10px')]},
