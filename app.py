@@ -38,7 +38,7 @@ def get_db_connection():
 
 # Authenticate Gmail API
 def authenticate_gmail():
-    """Authenticate and return the Gmail API service (headless mode for Render)."""
+    """Authenticate and return the Gmail API service in a Streamlit app."""
     creds = None
 
     # Check if token.pickle exists to reuse credentials
@@ -46,38 +46,28 @@ def authenticate_gmail():
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
 
+    # If no valid credentials, start OAuth flow
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Decode Base64 credentials from environment variable
+            # Decode Base64 credentials from Render's secrets
             credentials_json = os.getenv('GMAIL_CREDENTIALS')  # Fetch from Render's secrets
             if credentials_json:
                 credentials_json = base64.b64decode(credentials_json).decode('utf-8')
 
-                # Write the decoded credentials to a temporary file
+                # Write credentials to a temporary file
                 with open('credentials.json', 'w') as f:
                     f.write(credentials_json)
 
                 flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
 
-                # Generate URL for manual authentication
-                auth_url, _ = flow.authorization_url(prompt='consent')
+                # Start the authentication process in a browser
+                creds = flow.run_local_server(port=8501)  # Use Streamlit's default port
 
-                print(f"🔗 Go to this URL to authorize the app: {auth_url}")
-
-                # Ask user to input the authorization code from the browser
-                auth_code = input("Enter the authorization code: ").strip()
-
-                # Fetch token using the authorization code
-                flow.fetch_token(code=auth_code)
-                creds = flow.credentials
-
-                # Save token for future use
+                # Save the credentials for future use
                 with open('token.pickle', 'wb') as token:
                     pickle.dump(creds, token)
-            else:
-                raise ValueError("GMAIL_CREDENTIALS environment variable is missing.")
 
     return build('gmail', 'v1', credentials=creds)
     
@@ -217,33 +207,29 @@ def fetch_classified_data():
     
 # Main application
 def main():
-    """Main function to continuously fetch, classify, and display classified decline data."""
-    st.title("Classified Declines Dashboard")
+    """Main function to authenticate and fetch emails automatically."""
+    st.title("📧 Gmail Decliner Bot")
 
-    # Fetch & classify new emails automatically every 5 minutes
-    if st.button("Fetch New Emails"):
-        with st.spinner("Fetching and processing new emails..."):
-            email_df = fetch_latest_emails()
-            if not email_df.empty:
-                classify_and_insert_declines(email_df)
+    # Check if authentication is needed
+    if not os.path.exists('token.pickle'):
+        st.warning("⚠️ Authentication Required! Click the button below to authenticate.")
+        if st.button("Authenticate with Gmail"):
+            authenticate_gmail()
+            st.success("✅ Authentication Successful! You can now fetch emails.")
+
+    else:
+        st.success("✅ You are already authenticated!")
+
+        # Fetch emails automatically
+        if st.button("Fetch New Emails"):
+            service = authenticate_gmail()
+            results = service.users().messages().list(userId='me', labelIds=['INBOX'], q="is:unread").execute()
+            messages = results.get("messages", [])
+
+            if not messages:
+                st.write("📭 No new unread emails found.")
             else:
-                st.success("No new unread emails.")
-
-    # Auto-refresh data every 5 minutes
-    while True:
-        st.write("Checking for new emails...")
-        email_df = fetch_latest_emails()
-        if not email_df.empty:
-            classify_and_insert_declines(email_df)
-        time.sleep(300)  # Wait 5 minutes
-
-        # Refresh dashboard with new classified declines
-        classified_data = fetch_classified_data()
-        if not classified_data.empty:
-            st.write("### Classified Declined Emails")
-            st.dataframe(classified_data)
-        else:
-            st.warning("⚠️ No classified declines found in Supabase.")
+                st.write(f"📩 {len(messages)} new unread emails found!")
 
 
 if __name__ == "__main__":
