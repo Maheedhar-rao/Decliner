@@ -36,7 +36,7 @@ def get_db_connection():
 
 # Authenticate Gmail API
 def authenticate_gmail():
-    """Authenticate and return the Gmail API service."""
+    """Authenticate and return the Gmail API service (headless mode for Render)."""
     creds = None
 
     # Check if token.pickle exists to reuse credentials
@@ -48,21 +48,37 @@ def authenticate_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Decode the Base64-encoded credentials from Render's environment variable
-            credentials_json = base64.b64decode(os.getenv('GMAIL_CREDENTIALS')).decode('utf-8')
+            # Decode Base64 credentials from environment variable
+            credentials_json = os.getenv('GMAIL_CREDENTIALS')  # Fetch from Render's secrets
+            if credentials_json:
+                credentials_json = base64.b64decode(credentials_json).decode('utf-8')
 
-            # Load credentials from decoded JSON
-            with open('credentials.json', 'w') as f:
-                f.write(credentials_json)
+                # Write the decoded credentials to a temporary file
+                with open('credentials.json', 'w') as f:
+                    f.write(credentials_json)
 
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_console()
+                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
 
-            # Save token for future use
-            with open('token.pickle', 'wb') as token:
-                pickle.dump(creds, token)
+                # Generate URL for manual authentication
+                auth_url, _ = flow.authorization_url(prompt='consent')
+
+                print(f"🔗 Go to this URL to authorize the app: {auth_url}")
+
+                # Ask user to input the authorization code from the browser
+                auth_code = input("Enter the authorization code: ").strip()
+
+                # Fetch token using the authorization code
+                flow.fetch_token(code=auth_code)
+                creds = flow.credentials
+
+                # Save token for future use
+                with open('token.pickle', 'wb') as token:
+                    pickle.dump(creds, token)
+            else:
+                raise ValueError("GMAIL_CREDENTIALS environment variable is missing.")
 
     return build('gmail', 'v1', credentials=creds)
+    
 # Check matches in the database using fuzzy matching
 def check_matches_in_db(lender_name, business_name):
     """Check for fuzzy matches with lender names and business names in the deals_submitted table in Supabase."""
