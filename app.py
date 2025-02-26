@@ -14,6 +14,8 @@ import time
 import supabase
 import openai
 import json
+from dotenv import load_dotenv
+
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
