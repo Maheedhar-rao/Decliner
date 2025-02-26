@@ -36,6 +36,8 @@ def get_db_connection():
 def authenticate_gmail():
     """Authenticate and return the Gmail API service."""
     creds = None
+
+    # Check if token.pickle exists to reuse credentials
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
@@ -44,14 +46,21 @@ def authenticate_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # Decode the Base64-encoded credentials from Render's environment variable
+            credentials_json = base64.b64decode(os.getenv('GMAIL_CREDENTIALS')).decode('utf-8')
+
+            # Load credentials from decoded JSON
+            with open('credentials.json', 'w') as f:
+                f.write(credentials_json)
+
             flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
             creds = flow.run_local_server(port=8081)
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+
+            # Save token for future use
+            with open('token.pickle', 'wb') as token:
+                pickle.dump(creds, token)
 
     return build('gmail', 'v1', credentials=creds)
-
-
 # Check matches in the database using fuzzy matching
 def check_matches_in_db(lender_name, business_name):
     """Check for fuzzy matches with lender names and business names in the deals_submitted table in Supabase."""
