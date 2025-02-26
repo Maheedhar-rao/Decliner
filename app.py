@@ -139,6 +139,37 @@ def classify_and_insert_declines(email_df):
     
     except Exception as e:
         st.error(f"Database operation failed: {e}")
+def fetch_latest_emails():
+    """Fetch the latest unread emails from Gmail."""
+    try:
+        service = authenticate_gmail()
+
+        # Fetch unread emails
+        results = service.users().messages().list(userId='me', labelIds=['INBOX'], q="is:unread").execute()
+        messages = results.get("messages", [])
+
+        email_data = []
+        for msg in messages:
+            msg_details = service.users().messages().get(userId='me', id=msg["id"]).execute()
+
+            # Extract email metadata
+            headers = msg_details.get("payload", {}).get("headers", [])
+            snippet = msg_details.get("snippet", "")
+
+            # Extract sender and subject
+            sender = next((header["value"] for header in headers if header["name"] == "From"), "Unknown Sender")
+            subject = next((header["value"] for header in headers if header["name"] == "Subject"), "No Subject")
+
+            email_data.append({"sender": sender, "subject": subject, "snippet": snippet})
+
+            # Mark email as read (optional)
+            service.users().messages().modify(userId='me', id=msg["id"], body={"removeLabelIds": ["UNREAD"]}).execute()
+
+        return pd.DataFrame(email_data) if email_data else pd.DataFrame()
+    
+    except Exception as e:
+        st.error(f"Error fetching emails: {e}")
+        return pd.DataFrame()
 
 
 def fetch_classified_data():
@@ -157,26 +188,33 @@ def fetch_classified_data():
     
 # Main application
 def main():
-    """Main function to display classified decline data from the bot."""
+    """Main function to continuously fetch, classify, and display classified decline data."""
     st.title("Classified Declines Dashboard")
-    
-    # Fetch classified data
-    classified_data = fetch_classified_data()
-    
-    if not classified_data.empty:
-        st.write("### Classified Declined Emails")
-        st.dataframe(
-            classified_data.style.format({
-                'created_at': lambda x: pd.to_datetime(x).strftime('%Y-%m-%d %H:%M:%S') if pd.notna(x) else "N/A",
-            }).set_table_styles([
-                {'selector': 'thead th', 'props': [('background-color', '#f2f2f2'), ('font-weight', 'bold')]},
-                {'selector': 'tbody td', 'props': [('text-align', 'left'), ('font-size', '17px'), ('padding', '10px')]},
-                {'selector': 'thead', 'props': [('border-bottom', '2px solid #D9534F')]},
-            ], overwrite=True),
-            use_container_width=True
-        )
-    else:
-        st.warning("⚠️ No classified declines found in the `declines` table.")
+
+    # Fetch & classify new emails automatically every 5 minutes
+    if st.button("Fetch New Emails"):
+        with st.spinner("Fetching and processing new emails..."):
+            email_df = fetch_latest_emails()
+            if not email_df.empty:
+                classify_and_insert_declines(email_df)
+            else:
+                st.success("No new unread emails.")
+
+    # Auto-refresh data every 5 minutes
+    while True:
+        st.write("Checking for new emails...")
+        email_df = fetch_latest_emails()
+        if not email_df.empty:
+            classify_and_insert_declines(email_df)
+        time.sleep(300)  # Wait 5 minutes
+
+        # Refresh dashboard with new classified declines
+        classified_data = fetch_classified_data()
+        if not classified_data.empty:
+            st.write("### Classified Declined Emails")
+            st.dataframe(classified_data)
+        else:
+            st.warning("⚠️ No classified declines found in Supabase.")
 
 
 if __name__ == "__main__":
