@@ -38,7 +38,7 @@ def get_db_connection():
 
 # Authenticate Gmail API
 def authenticate_gmail():
-    """Authenticate and return the Gmail API service in a Streamlit app."""
+    """Authenticate and return the Gmail API service in a headless Render environment."""
     creds = None
 
     # Check if token.pickle exists to reuse credentials
@@ -62,12 +62,27 @@ def authenticate_gmail():
 
                 flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
 
-                # Start the authentication process in a browser
-                creds = flow.run_local_server(port=8501)  # Use Streamlit's default port
+                # Manually authenticate using `run_console()`
+                auth_url, _ = flow.authorization_url(prompt='consent')
 
-                # Save the credentials for future use
-                with open('token.pickle', 'wb') as token:
-                    pickle.dump(creds, token)
+                # Display URL in Streamlit (copy-paste method)
+                st.write("🔗 **Click the link below to authenticate Gmail:**")
+                st.markdown(f"[Authorize Gmail]({auth_url})")
+
+                # Wait for user to enter the authentication code
+                auth_code = st.text_input("Enter the authorization code from Google:")
+                if st.button("Submit Code"):
+                    if auth_code:
+                        flow.fetch_token(code=auth_code)
+                        creds = flow.credentials
+
+                        # Save the credentials for future use
+                        with open('token.pickle', 'wb') as token:
+                            pickle.dump(creds, token)
+
+                        st.success("✅ Authentication successful! You can now fetch emails.")
+                    else:
+                        st.error("⚠️ Please enter the authentication code.")
 
     return build('gmail', 'v1', credentials=creds)
     
